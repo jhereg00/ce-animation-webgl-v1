@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Learning WebGL</title>
+
+  <style>
+    body { padding: 0; margin: 0; background: #ccc; }
+    p { padding: 1rem; }
+    canvas { display: block; border: 1px dotted gray; margin: 0 auto; }
+		#canvasHolder {
+			position: relative;
+		}
+		#canvasHolder::before {
+			content: '';
+			position: absolute;
+			top: 0; left: 0;
+			width: 50%; height: 50%;
+			border: 1px dotted red;
+		}
+		#canvasHolder::after {
+			content: '';
+			position: absolute;
+			top: 50%; left: 50%;
+			width: 50%; height: 50%;
+			border: 1px dotted red;
+		}
+  </style>
+</head>
+<body>
+  <p>Using the <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial" target="_blank">MDN tutorials</a> to learn WebGL</p>
+
+	<div id="canvasHolder"></div>
+
+  <!-- our shaders -->
+  <script id="vertex-shader-3d" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+		attribute vec4 aVertexColor;
+		attribute vec3 aVertexNormal;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+		uniform mat4 uNormalMatrix;
+
+		varying lowp vec4 vColor;
+		varying mediump vec3 vPos;
+		varying mediump vec3 vNormal;
+
+    void main(void) {
+			// put here temporarily because I'm lazy
+			// mediump vec3 ambientLight = vec3(0.4);
+			// mediump vec3 directionalLightColor = vec3(1.0,1.0,1.0);
+			// mediump vec3 directionalVector = vec3(1.0, 0.8, 0.9);
+
+			vec4 truePos = uMVMatrix * vec4(aVertexPosition, 1.0);
+      gl_Position = uPMatrix * truePos;
+			vColor = aVertexColor;
+
+			vNormal = (uNormalMatrix * vec4(aVertexNormal, 1.0)).xyz;
+			// highp float directional = max(dot(transformedNormal.xyz, directionalVector), 0.0);
+			// vLighting = ambientLight + (directionalLightColor * directional);
+			vPos = truePos.xyz;
+    }
+  </script>
+
+	<script id="vertex-shader-2d" type="x-shader/x-vertex">
+    attribute vec2 aVertexPosition;
+
+		varying mediump vec2 vTextureCoords;
+
+    void main(void) {
+			vTextureCoords = (aVertexPosition.xy + vec2(1.0)) / vec2(2);
+      gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+    }
+  </script>
+
+	<script id="fragment-color-shader" type="x-shader/x-fragment">
+		precision mediump float;
+
+		uniform sampler2D uShadowSampler;
+		uniform mat4 uLightProjection;
+
+		varying lowp vec4 vColor;
+		varying mediump vec3 vNormal;
+		varying mediump vec3 vPos;
+
+		const mediump vec2 shadowClipNearFar = vec2(.1, 20);
+
+		void main (void) {
+			// put here temporarily because I'm lazy
+			mediump vec3 ambientLight = vec3(0.4);
+			mediump vec3 directionalLightColor = vec3(1.0,1.0,1.0);
+			mediump vec3 directionalVector = vec3(1.0, 0.8, 0.9);
+
+			highp float directional = max(dot(vNormal.xyz, directionalVector), 0.0);
+			mediump vec4 color = vec4(ambientLight,1.0) * vColor;
+			mediump vec4 lightColor = vec4(directionalLightColor * directional,1.0) * vColor;
+
+			// determine shadow
+			float lightDist =
+				(length(vPos - directionalVector) - shadowClipNearFar.x)
+				/
+				(shadowClipNearFar.y - shadowClipNearFar.x);
+
+			//mediump float lightDist = distance(directionalVector, vPos) / 20.;
+			highp vec2 textureLocation = ((uLightProjection * vec4(vPos,1.0)).xy + 1.0) / 2.0;
+			mediump vec4 shadowMapValue = texture2D(uShadowSampler, textureLocation);
+
+			if (lightDist <= shadowMapValue.r + .05) {
+				color += vec4(lightColor.rgb, 1.0);
+			}
+			gl_FragColor = color;
+			gl_FragColor.a = 1.0;
+		}
+	</script>
+
+	<script id="fragment-depth-shader" type="x-shader/x-fragment">
+		varying mediump vec3 vPos;
+
+		const lowp float focalDepth = -2.5;
+		const lowp float focalRange = 0.3;
+		const lowp float focalDropoff = 0.5;
+
+		void main (void) {
+			mediump float fDepth = vPos.z;
+			lowp vec3 colorVariance = vec3(1.0 - (max(0.0, (abs(fDepth - focalDepth) - focalRange)) / focalDropoff));
+			gl_FragColor = vec4(colorVariance, 1.0);
+		}
+	</script>
+
+	<script id="fragment-shadow-shader" type="x-shader/x-fragment">
+		precision mediump float;
+
+		uniform mat4 uLightProjection;
+
+		varying mediump vec3 vPos;
+
+		const mediump vec2 shadowClipNearFar = vec2(.1, 20);
+
+		void main (void) {
+			mediump vec3 directionalVector = vec3(1.0, 0.8, 0.9);
+			float lightDist =
+				(length(vPos - directionalVector) - shadowClipNearFar.x)
+				/
+				(shadowClipNearFar.y - shadowClipNearFar.x);
+
+			gl_FragColor = vec4(vec3(lightDist), 1.0);
+		}
+	</script>
+
+	<script id="fragment-output-shader" type="x-shader/x-fragment">
+		uniform sampler2D uSampler;
+		uniform sampler2D uDepthMap;
+		uniform mediump vec2 uTextureSize;
+
+		varying mediump vec2 vTextureCoords;
+
+		const mediump float maxBlur0 = 0.045;
+		const mediump float maxBlur1 = 0.122;
+		const mediump float maxBlur2 = 0.045;
+		const mediump float maxBlur3 = 0.122;
+		const mediump float maxBlur4 = 0.332;
+		const mediump float maxBlur5 = 0.122;
+		const mediump float maxBlur6 = 0.045;
+		const mediump float maxBlur7 = 0.122;
+		const mediump float maxBlur8 = 0.045;
+
+		// const mediump float maxBlur0 = 0.08;
+		// const mediump float maxBlur1 = 0.13;
+		// const mediump float maxBlur2 = 0.08;
+		// const mediump float maxBlur3 = 0.13;
+		// const mediump float maxBlur4 = 0.2;
+		// const mediump float maxBlur5 = 0.13;
+		// const mediump float maxBlur6 = 0.08;
+		// const mediump float maxBlur7 = 0.13;
+		// const mediump float maxBlur8 = 0.08;
+
+		void main (void) {
+			lowp vec4 depth = texture2D(uDepthMap, vTextureCoords);
+			mediump float blur = 1.0 - depth.r * depth.a;
+			mediump vec2 onePixel = vec2(1.0, 1.0) / uTextureSize;
+			mediump vec4 colorSum =
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(-1,-1)) * (blur * maxBlur0) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(0,-1)) * (blur * maxBlur1) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(1,-1)) * (blur * maxBlur2) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(-1,0)) * (blur * maxBlur3) +
+				// doing center at end
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(1,1)) * (blur * maxBlur5) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(-1,1)) * (blur * maxBlur6) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(0,1)) * (blur * maxBlur7) +
+				texture2D(uSampler, vTextureCoords + onePixel * vec2(1,1)) * (blur * maxBlur8);
+			colorSum.a = 1.0;
+			mediump float weight =
+				blur * maxBlur0 +
+				blur * maxBlur1 +
+				blur * maxBlur2 +
+				blur * maxBlur3 +
+				blur * maxBlur5 +
+				blur * maxBlur6 +
+				blur * maxBlur7 +
+				blur * maxBlur8;
+			gl_FragColor = vec4(colorSum.rgb + texture2D(uSampler, vTextureCoords).rgb * (1.0 - weight), 1.0);//texture2D(uSampler, vTextureCoords);
+		}
+	</script>
+
+  <script src="js/depth.js"></script>
+</body>
+</html>
