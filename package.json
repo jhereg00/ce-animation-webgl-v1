@@ -1,7 +1,7 @@
 {
-  "name": "startup-lib",
+  "name": "ce-animation",
   "version": "1.0.0",
-  "description": "Startup files for new projects",
+  "description": "interactive animation for c-e.com",
   "main": "null",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

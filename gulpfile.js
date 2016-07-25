@@ -7,7 +7,7 @@ if (process.argv.indexOf('--dev') != -1)
 global.devPath = './dev';
 global.distPath = './dist';
 
-global.serverPort = 8001;
+global.serverPort = 8002;
 
 var gulp = require('gulp');
 var webserver = require('gulp-webserver');
@@ -15,6 +15,7 @@ gulp.task('sass',require('./gulp-tasks/sass'));
 gulp.task('scripts',require('./gulp-tasks/scripts'));
 gulp.task('images',require('./gulp-tasks/images'));
 gulp.task('html',require('./gulp-tasks/html'));
+gulp.task('glsl',require('./gulp-tasks/glsl'));
 
 // start a server for easy dev
 gulp.task('server',require('./gulp-tasks/webserver'));
@@ -26,9 +27,10 @@ gulp.task('watch',['build'], function () {
   gulp.watch([global.devPath + '/js/**/*'],['scripts']);
   gulp.watch([global.devPath + '/images/**/*'],['images']);
   gulp.watch([global.devPath + '/**/*.html'],['html']);
+  gulp.watch([global.devPath + '/glsl/**/*'],['glsl']);
 });
 // watch alias
 gulp.task('dev',['watch'],require('./gulp-tasks/webserver'));
 
 // build
-gulp.task('build',['sass','scripts','images','html']);
+gulp.task('build',['sass','scripts','images','html','glsl']);

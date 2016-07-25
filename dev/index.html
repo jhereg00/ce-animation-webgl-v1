@@ -11,41 +11,7 @@
   </style>
 </head>
 <body>
-  <p>Using the <a href="https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial" target="_blank">MDN tutorials</a> to learn WebGL</p>
-
-  <!-- our shaders -->
-  <script id="vertex-shader" type="x-shader/x-vertex">
-    attribute vec3 aVertexPosition;
-		attribute vec4 aVertexColor;
-
-    uniform mat4 uMVMatrix;
-    uniform mat4 uPMatrix;
-
-		varying lowp vec4 vColor;
-		varying mediump float depth;
-
-    void main(void) {
-			vec4 truePos = uMVMatrix * vec4(aVertexPosition, 1.0);
-			depth = truePos.z;
-      gl_Position = uPMatrix * truePos;
-			vColor = aVertexColor;
-    }
-  </script>
-
-	<script id="fragment-shader" type="x-shader/x-fragment">
-		varying lowp vec4 vColor;
-		varying mediump float depth;
-
-		const lowp float focalDepth = -3.0;
-		const lowp float focalRange = 0.25;
-		const lowp float focalDropoff = 0.5;
-
-		void main (void) {
-			lowp vec3 colorVariance = vec3(max(0.0, (abs(depth - focalDepth) - focalRange)) / focalDropoff);
-			gl_FragColor = vColor - vec4(colorVariance, 0.0);
-		}
-	</script>
-
+  
   <script src="js/scripts.js"></script>
 </body>
 </html>
