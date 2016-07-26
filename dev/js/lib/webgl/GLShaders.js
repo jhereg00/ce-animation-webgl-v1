@@ -48,6 +48,7 @@ var loadAndInitShader = function (gl, type, name, path, cb) {
         cb(shader);
     }
     else if (cb && typeof cb === 'function') {
+      console.error("An error occurred loading the shaders: " + name);
       cb(null);
     }
   });

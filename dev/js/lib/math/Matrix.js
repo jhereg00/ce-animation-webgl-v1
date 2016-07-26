@@ -379,6 +379,7 @@ Matrix.prototype = {
 // aliases
 Matrix.prototype.eql = Matrix.prototype.equals;
 Matrix.prototype.dup = Matrix.prototype.duplicate;
+Matrix.prototype.x = Matrix.prototype.multiply;
 
 // namespaced functions
 /**

@@ -23,6 +23,7 @@ var OrthographicCamera = function () {
 	this.perspectiveMatrix = Matrix.create.identity(4);
 	this.moveTo(Vector.create([0, 0, 0]), false);
 	this.lookAt(Vector.create([0, 0, -1]));
+	this.makeOrtho(2, 1, 0.1, 2.1);
 };
 OrthographicCamera.prototype = {
 	makeOrtho: function (height, aspect, znear, zfar) {
@@ -34,8 +35,6 @@ OrthographicCamera.prototype = {
            [0,           -2 / (height), 0,                   0],
            [0,           0,            -2 / (zfar - znear), 0],
            [0,           0,            0,                   1]]);
-
-		console.log(this.perspectiveMatrix.inspect());
 
 		this.buildProjectionMatrix();
 		return this;
