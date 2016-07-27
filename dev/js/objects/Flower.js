@@ -14,7 +14,7 @@ var MAX_ROT_SPEED = Math.PI / 180 * 360; // degrees per second
 /**
  *  Flower
  *  @param {WebGLContext} gl
- *  @param {GLProgram} program
+ *
  *
  *  @method setObjectTransform
  *    @param rotationX
@@ -32,16 +32,21 @@ var MAX_ROT_SPEED = Math.PI / 180 * 360; // degrees per second
  *    @param translationY
  *    @param translationZ
  *  @method draw
- *    @param camera
+ *    @param {PerspectiveCamera or OrthographicCamera} camera
+ *    @param {GLProgram} program
  */
-var Flower = function (gl, program) {
+var Flower = function (gl) {
   this.gl = gl;
-  this.program = program;
 
   this.buildLayers();
   this.buildBuffers();
   this.setObjectTransform(0,0,0,0,0,0);
   this.setWorldTransform(0,0,0,0,0,0);
+
+  this.xSpeed = Math.random() * .2;
+  this.ySpeed = Math.random() * -.3 - .2;
+  this.yRotSpeed = Math.random() * Math.PI / 180 * 15;
+  this.xRotSpeed = Math.random() * Math.PI / 180 * 10;
 }
 Flower.prototype = {
   buildLayers: function () {
@@ -49,8 +54,13 @@ Flower.prototype = {
     var outerRadius = .45;
     var points = 7;
     var lineCount = [80,280,130];
+    // var lineCount = [
+    //   Math.random() * 100 + 50,
+    //   Math.random() * 100 + 200,
+    //   Math.random() * 300 + 50
+    // ];
     var startZ = [0,0.05, 0.01];
-    var endZ = [0.1, 0.15, 0.2];
+    var endZ = [0.2, 0.15, 0.2];
     this.layers = [];
     for (var i = 0; i < 3; i++) {
       var offset = (i * (outerRadius - innerRadius) / 2);
@@ -109,22 +119,22 @@ Flower.prototype = {
       this.worldTransform.tz,
       ['rz','rx','ry','t']);
   },
-  draw: function (camera) {
+  draw: function (camera, program) {
     // use the program
-    this.program.use();
+    program.use();
     // bind camera
-    this.gl.uniformMatrix4fv(this.program.uniforms.uPMatrix, false, new Float32Array(camera.getMatrix().flatten()));
+    this.gl.uniformMatrix4fv(program.uniforms.uPMatrix, false, new Float32Array(camera.getMatrix().flatten()));
 
     // bind the buffers
-    this.buffers.vertices.bindToAttribute(this.program.attributes['aVertexPosition']);
+    this.buffers.vertices.bindToAttribute(program.attributes['aVertexPosition']);
 
     // temp
-    this.gl.uniformMatrix4fv(this.program.uniforms.uWorldMatrix, false, new Float32Array(this.worldTransformMatrix.flatten()));
+    this.gl.uniformMatrix4fv(program.uniforms.uWorldMatrix, false, new Float32Array(this.worldTransformMatrix.flatten()));
 
     // draw each layer
     for (var i = 0, len = this.layers.length; i < len; i++) {
       // bind uniforms
-      this.gl.uniformMatrix4fv(this.program.uniforms.uModelMatrix, false, new Float32Array(this.layers[i].transformMatrix.x(this.objectTransformMatrix).flatten()));
+      this.gl.uniformMatrix4fv(program.uniforms.uModelMatrix, false, new Float32Array(this.layers[i].transformMatrix.x(this.objectTransformMatrix).flatten()));
 
       // bind the buffers' data
       this.buffers.vertices.bindData(this.layers[i].vertices);
@@ -137,10 +147,29 @@ Flower.prototype = {
       this.lastTime = new Date().getTime();
     }
     var now = new Date().getTime();
+    var deltaTime = now - this.lastTime;
+    var deltaTimeInSeconds = deltaTime / 1000;
+    // update layer rotations
     for (var i = 0, len = this.layers.length; i < len; i++) {
-      this.layers[i].transform.rz += Math.PI / 180 * (this.layers[i].rotZSpeed * (now - this.lastTime) / 1000);
+      this.layers[i].transform.rz += Math.PI / 180 * (this.layers[i].rotZSpeed * deltaTimeInSeconds);
       this.layers[i].setTransform();
     }
+    // update world pos
+    this.setWorldTransform(
+      this.worldTransform.rx += this.xRotSpeed * deltaTimeInSeconds,
+      this.worldTransform.ry += this.yRotSpeed * deltaTimeInSeconds,
+      0,
+      this.worldTransform.tx += this.xSpeed * deltaTimeInSeconds,
+      this.worldTransform.ty += this.ySpeed * deltaTimeInSeconds,
+      this.worldTransform.tz
+    );
+
+    if (this.worldTransform.ty < -2.5 - Math.abs(.5 * this.worldTransform.tz))
+      this.worldTransform.ty = 2.5 + Math.abs(1.5 * this.worldTransform.tz);
+
+    if (this.worldTransform.tx > 4.5 + Math.abs(.5 * this.worldTransform.tz))
+      this.worldTransform.tx = -4.5 - Math.abs(1.5 * this.worldTransform.tz);
+
     this.lastTime = now;
   }
 }
@@ -164,7 +193,6 @@ var Layer = function (inner, outer, points, lineCount, startOnPoint, innerZ, out
 
   var maxLength = outer - inner;
   var zDepth = outerZ - innerZ;
-  console.log(zDepth);
   var i = lineCount;
   while (i--) {
     var jitter = (Math.random() - .5) * Math.PI / 180;

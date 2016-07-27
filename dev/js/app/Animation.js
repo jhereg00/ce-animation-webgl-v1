@@ -7,6 +7,7 @@
 var windowSize = require('lib/windowSize');
 var GLShaders = require('lib/webgl/GLShaders');
 var GLProgram = require('lib/webgl/GLProgram');
+var GLTextureFramebuffer = require('lib/webgl/GLTextureFramebuffer');
 var PerspectiveCamera = require('lib/webgl/PerspectiveCamera');
 var OrthographicCamera = require('lib/webgl/OrthographicCamera');
 var Vector = require('lib/math/Vector');
@@ -64,8 +65,10 @@ CEAnimation.prototype = {
     GLShaders.loadAll(gl, [
       [gl.VERTEX_SHADER, 'flowerVertex', 'glsl/flower.vs.glsl'],
       [gl.FRAGMENT_SHADER, 'flowerFrag', 'glsl/flower.fs.glsl'],
-      [gl.VERTEX_SHADER, 'flatVertex', 'glsl/flat.vs.glsl'],
-      [gl.FRAGMENT_SHADER, 'flatFrag', 'glsl/flat.fs.glsl']
+      [gl.VERTEX_SHADER, 'outputVertex', 'glsl/output.vs.glsl'],
+      [gl.FRAGMENT_SHADER, 'outputFrag', 'glsl/output.fs.glsl'],
+      [gl.FRAGMENT_SHADER, 'depthFrag', 'glsl/depth.fs.glsl'],
+      [gl.FRAGMENT_SHADER, 'dofFrag', 'glsl/dof.fs.glsl']
     ], function (success) {
       // done!
       console.log('Finished loading shaders. succeeded: ' + success);
@@ -98,15 +101,48 @@ CEAnimation.prototype = {
             'uWorldMatrix',
             'uPMatrix'
           ]),
-      flat: GLProgram.create(
-          'flat',
+      flowerDepth: GLProgram.create(
+          'flowerDepth',
           this.gl,
           [
-            GLShaders.get('flatVertex'),
-            GLShaders.get('flatFrag')
+            GLShaders.get('flowerVertex'),
+            GLShaders.get('depthFrag')
           ],
           [
             'aVertexPosition'
+          ],
+          [
+            'uModelMatrix',
+            'uWorldMatrix',
+            'uPMatrix'
+          ]),
+      output: GLProgram.create(
+          'output',
+          this.gl,
+          [
+            GLShaders.get('outputVertex'),
+            GLShaders.get('outputFrag')
+          ],
+          [
+            'aVertexPosition'
+          ],
+          [
+            'uSampler'
+          ]),
+      dof: GLProgram.create(
+          'dof',
+          this.gl,
+          [
+            GLShaders.get('outputVertex'),
+            GLShaders.get('dofFrag')
+          ],
+          [
+            'aVertexPosition'
+          ],
+          [
+            'uSampler',
+            'uDepthMap',
+            'uDepthMapSize'
           ])
     };
     // check that it worked
@@ -119,6 +155,13 @@ CEAnimation.prototype = {
     if (successful) {
       // programs are ready, keep going
       this.initObjects();
+      this.initCameras();
+      this.initFramebuffers();
+      // TODO: convert to custom event emitter
+      this.initted = true;
+      if (this.onInit && typeof this.onInit === 'function') {
+        this.onInit(this);
+      }
     }
 
     return this;
@@ -126,44 +169,89 @@ CEAnimation.prototype = {
   // initialize the objects in the program
   initObjects: function () {
     // temp
-    this.flower = new Flower (this.gl, this.programs.flower);
-    this.flower.setObjectTransform(0, Math.PI / 180 * 30, 0, 0, 0, 0);
-    this.flower.setWorldTransform(0, 0, 0, -0.5, 0, 0);
+    this.flowers = [];
+    for (var i = 0; i < 30; i++) {
+      var f = new Flower (this.gl, this.programs.flower);
+      f.setWorldTransform(Math.random() * Math.PI, Math.random() * Math.PI, 0, Math.random () * 3.5 - 2.5, Math.random () * 8 - 4, Math.random () * 7 - 6);
+      this.flowers.push(f);
+    }
 
     this.screenRenderer = new ScreenRenderer (this.gl, this.programs.flat);
 
-    // cameras
-    // var pCam = new OrthographicCamera();
-    // pCam.makeOrtho(2, this.canvas.width / this.canvas.height, 0.1, 9.1)
+    return this;
+  },
+  initCameras: function () {
+    var pCamRadiusFromOrigin = 2;
     var pCam = new PerspectiveCamera();
-    pCam.makePerspective(45, this.canvas.width / this.canvas.height, .5, 4);
-    pCam.moveTo(Vector.create([0,0,2]));
+    pCam.makePerspective(45, this.canvas.width / this.canvas.height, .5, 8);
+    pCam.moveTo(Vector.create([0,0,pCamRadiusFromOrigin]));
+    pCam.lookAt(Vector.create([0,0,0]));
     this.cameras = {
       primary: pCam
     }
 
-    this.initted = true;
-    // TODO: convert to custom event emitter
-    if (this.onInit && typeof this.onInit === 'function') {
-      this.onInit(this);
-    }
+    // listen and move
+    document.body.addEventListener('mousemove', function (e) {
+      var xRot = e.clientY / windowSize.height() * (Math.PI / 180 * 30) - (Math.PI / 180 * 15);
+      var yRot = e.clientX / windowSize.width() * (Math.PI / 180 * 30) - (Math.PI / 180 * 15) + (Math.PI / 2);
+      pCam.moveTo(Vector.create([
+        -Math.cos(yRot) * pCamRadiusFromOrigin,
+        -Math.sin(xRot) * pCamRadiusFromOrigin,
+        Math.sin(yRot) * pCamRadiusFromOrigin
+      ]));
+    });
 
     return this;
+  },
+  initFramebuffers: function () {
+    this.framebuffers = {
+      'color': GLTextureFramebuffer.create(this.gl, this.canvas.width, this.canvas.height),
+      'depth': GLTextureFramebuffer.create(this.gl, this.canvas.width, this.canvas.height)
+    }
   },
   addInitFunction: function (fn) {
     this.onInit = fn;
   },
   update: function () {
     // update objects that can be updated
-    this.flower.update();
+    for (var i = 0, len = this.flowers.length; i < len; i++) {
+      this.flowers[i].update();
+    }
   },
   // draw everything
   draw: function () {
-    // clear output buffer
-    this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
+    var gl = this.gl;
+    var _this = this;
+    function _drawAllObjects (camera, program) {
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      for (var i = 0, len = _this.flowers.length; i < len; i++) {
+        _this.flowers[i].draw(camera, program);
+      }
+    }
 
-    this.flower.draw(this.cameras.primary);
-    //this.screenRenderer.draw();
+    // draw colors
+    this.framebuffers.color.use();
+
+    gl.clearColor(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2],BG_COLOR[3]);
+    _drawAllObjects(this.cameras.primary, this.programs.flower);
+
+    // draw depth
+    this.framebuffers.depth.use();
+
+    gl.clearColor(1.0,1.0,1.0,1.0);
+    _drawAllObjects(this.cameras.primary, this.programs.flowerDepth);
+
+    // draw depth
+
+    // draw output
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.gl.viewport(0,0,this.canvas.width, this.canvas.height);
+    this.screenRenderer.draw(
+      null,
+      this.programs.dof,
+      this.framebuffers.color.getTexture(),
+      this.framebuffers.depth.getTexture(),
+      [this.framebuffers.depth.width, this.framebuffers.depth.height]);
 
     return this;
   }

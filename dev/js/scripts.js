@@ -16,10 +16,3 @@ ceAnim.addInitFunction(function (anim) {
     requestAnimationFrame(animate);
   })();
 })
-
-// temp
-document.body.addEventListener('mousemove', function (e) {
-  var xRot = -Math.PI / 180 * (e.clientY / windowSize.height() * 45 - 22.5);
-  var yRot = Math.PI / 180 * (e.clientX / windowSize.width() * 45 - 22.5);
-  ceAnim.flower.setWorldTransform(xRot, yRot);
-});

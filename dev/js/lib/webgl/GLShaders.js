@@ -41,7 +41,7 @@ var loadAndInitShader = function (gl, type, name, path, cb) {
       gl.compileShader(shader);
       // any errors?
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error("An error occurred compiling the shaders: " + gl.getShaderInfoLog(shader));
+        console.error("An error occurred compiling the shaders (" + name + "): \n" + gl.getShaderInfoLog(shader));
       }
       loadedShaders[name] = shader;
       if (cb && typeof cb === 'function')
