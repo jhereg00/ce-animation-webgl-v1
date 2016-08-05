@@ -13,7 +13,7 @@ var OrthographicCamera = require('lib/webgl/OrthographicCamera');
 var Vector = require('lib/math/Vector');
 
 var ScreenRenderer = require('objects/ScreenRenderer');
-var Fractal = require('objects/Map').Fractal;
+var Flower = require('objects/Flower');
 
 /////////////////
 // settings
@@ -68,11 +68,7 @@ CEAnimation.prototype = {
       [gl.VERTEX_SHADER, 'outputVertex', 'glsl/output.vs.glsl'],
       [gl.FRAGMENT_SHADER, 'outputFrag', 'glsl/output.fs.glsl'],
       [gl.FRAGMENT_SHADER, 'depthFrag', 'glsl/depth.fs.glsl'],
-      [gl.FRAGMENT_SHADER, 'dofFrag', 'glsl/dof.fs.glsl'],
-      [gl.VERTEX_SHADER, 'topographyVertex', 'glsl/topography.vs.glsl'],
-      [gl.FRAGMENT_SHADER, 'topographyFrag', 'glsl/topography.fs.glsl'],
-      [gl.FRAGMENT_SHADER, 'topographyDepthFrag', 'glsl/topographyDepth.fs.glsl'],
-      [gl.FRAGMENT_SHADER, 'fractalFrag', 'glsl/fractal.fs.glsl']
+      [gl.FRAGMENT_SHADER, 'dofFrag', 'glsl/dof.fs.glsl']
     ], function (success) {
       // done!
       console.log('Finished loading shaders. succeeded: ' + success);
@@ -119,53 +115,6 @@ CEAnimation.prototype = {
             'uModelMatrix',
             'uWorldMatrix',
             'uPMatrix'
-          ]),
-      fractal: GLProgram.create(
-          'fractal',
-          this.gl,
-          [
-            GLShaders.get('topographyVertex'),
-            GLShaders.get('fractalFrag')
-          ],
-          [
-            'aVertexPosition'
-          ],
-          [
-            'uModelMatrix',
-            'uWorldMatrix',
-            'uPMatrix'
-          ]),
-      topography: GLProgram.create(
-          'topography',
-          this.gl,
-          [
-            GLShaders.get('topographyVertex'),
-            GLShaders.get('topographyFrag')
-          ],
-          [
-            'aVertexPosition'
-          ],
-          [
-            'uModelMatrix',
-            'uWorldMatrix',
-            'uPMatrix',
-            'uPlanes'
-          ]),
-      topographyDepth: GLProgram.create(
-          'topographyDepth',
-          this.gl,
-          [
-            GLShaders.get('topographyVertex'),
-            GLShaders.get('topographyDepthFrag')
-          ],
-          [
-            'aVertexPosition'
-          ],
-          [
-            'uModelMatrix',
-            'uWorldMatrix',
-            'uPMatrix',
-            'uPlanes'
           ]),
       output: GLProgram.create(
           'output',
@@ -220,7 +169,12 @@ CEAnimation.prototype = {
   // initialize the objects in the program
   initObjects: function () {
     // temp
-    this.fractal = new Fractal (this.gl, 4, 4);
+    this.flowers = [];
+    for (var i = 0; i < 30; i++) {
+      var f = new Flower (this.gl, this.programs.flower);
+      f.setWorldTransform(Math.random() * Math.PI, Math.random() * Math.PI, 0, Math.random () * 3.5 - 2.5, Math.random () * 8 - 4, Math.random () * 7 - 6);
+      this.flowers.push(f);
+    }
 
     this.screenRenderer = new ScreenRenderer (this.gl, this.programs.flat);
 
@@ -231,16 +185,15 @@ CEAnimation.prototype = {
     var pCam = new PerspectiveCamera();
     pCam.makePerspective(45, this.canvas.width / this.canvas.height, .5, 8);
     pCam.moveTo(Vector.create([0,0,pCamRadiusFromOrigin]));
-    pCam.lookAt(Vector.create([0,0,-1]));
+    pCam.lookAt(Vector.create([0,0,0]));
     this.cameras = {
       primary: pCam
     }
 
     // listen and move
-    var angleShift = 180;
     document.body.addEventListener('mousemove', function (e) {
-      var xRot = e.clientY / windowSize.height() * (Math.PI / 180 * angleShift) - (Math.PI / 180 * (angleShift / 2));
-      var yRot = e.clientX / windowSize.width() * (Math.PI / 180 * angleShift) - (Math.PI / 180 * (angleShift / 2)) + (Math.PI / 2);
+      var xRot = e.clientY / windowSize.height() * (Math.PI / 180 * 30) - (Math.PI / 180 * 15);
+      var yRot = e.clientX / windowSize.width() * (Math.PI / 180 * 30) - (Math.PI / 180 * 15) + (Math.PI / 2);
       pCam.moveTo(Vector.create([
         -Math.cos(yRot) * pCamRadiusFromOrigin,
         -Math.sin(xRot) * pCamRadiusFromOrigin,
@@ -260,7 +213,10 @@ CEAnimation.prototype = {
     this.onInit = fn;
   },
   update: function () {
-
+    // update objects that can be updated
+    for (var i = 0, len = this.flowers.length; i < len; i++) {
+      this.flowers[i].update();
+    }
   },
   // draw everything
   draw: function () {
@@ -268,23 +224,24 @@ CEAnimation.prototype = {
     var _this = this;
     function _drawAllObjects (camera, program) {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      _this.fractal.draw(camera, program);
+      for (var i = 0, len = _this.flowers.length; i < len; i++) {
+        _this.flowers[i].draw(camera, program);
+      }
     }
 
     // draw colors
     this.framebuffers.color.use();
 
     gl.clearColor(BG_COLOR[0],BG_COLOR[1],BG_COLOR[2],BG_COLOR[3]);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    this.fractal.draw(this.cameras.primary, this.programs.topography);
+    _drawAllObjects(this.cameras.primary, this.programs.flower);
 
     // draw depth
     this.framebuffers.depth.use();
-    //this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null)
+
     gl.clearColor(1.0,1.0,1.0,1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    //this.fractal.fractal.draw(this.cameras.primary, this.programs.fractal);
-    this.fractal.draw(this.cameras.primary, this.programs.topographyDepth);
+    _drawAllObjects(this.cameras.primary, this.programs.flowerDepth);
+
+    // draw depth
 
     // draw output
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);

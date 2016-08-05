@@ -5,6 +5,8 @@
  *  parts of the library we need.
  */
 
+var windowSize = require('lib/windowSize');
+
 var CEAnimation = require('app/Animation');
 var ceAnim = new CEAnimation(document.body).init();
 ceAnim.addInitFunction(function (anim) {

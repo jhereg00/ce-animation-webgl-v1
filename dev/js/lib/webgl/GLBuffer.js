@@ -54,7 +54,9 @@ GLBuffer.prototype = {
   },
   bindData: function (data, drawType) {
     this.bind();
-    this.gl.bufferData(this.type, new Float32Array(data), drawType || this.gl.STATIC_DRAW);
+    if (data instanceof Array)
+      data = new Float32Array(data);
+    this.gl.bufferData(this.type, data, drawType || this.gl.STATIC_DRAW);
   }
 }
 
